@@ -33,7 +33,9 @@ import (
     "encoding/hex"
     "io"
     "runtime"
+    "strconv"
     "strings"
+    "time"
 )
 
 var (
@@ -85,7 +87,7 @@ func DecryptCBC(cipherText string, secretKey string) (string, error) {
     }
     iv := c[:aes.BlockSize]
     decrypted := make([]byte, len(c[aes.BlockSize:]))
-    
+
     cbc := cipher.NewCBCDecrypter(block, iv)
     cbc.CryptBlocks(decrypted, c[aes.BlockSize:])
     return strings.TrimLeft(string(decrypted), "0"), nil
@@ -97,7 +99,7 @@ func DecryptCBC(cipherText string, secretKey string) (string, error) {
 // @param plainText: [string] The plain text.
 // @param secretKey: [string] The secret key.
 // @param cipherText: [string] The encrypted text.
-// @return
+// @return [bool] When verification is OK, will be true.
 //////////////////////////////////////////////////
 func VerifyCBC(plainText string, secretKey string, cipherText string) bool {
     decrypted, err := DecryptCBC(cipherText, secretKey)
@@ -167,7 +169,7 @@ func DecryptCTR(cipherText string, secretKey string) (string, error) {
 // @param plainText: [string] The plain text.
 // @param secretKey: [string] The secret key.
 // @param cipherText: [string] The encrypted text.
-// @return
+// @return [bool] When verification is OK, will be true.
 //////////////////////////////////////////////////
 func VerifyCTR(plainText string, secretKey string, cipherText string) bool {
     decrypted, err := DecryptCTR(cipherText, secretKey)
@@ -183,8 +185,64 @@ func VerifyCTR(plainText string, secretKey string, cipherText string) bool {
 
 
 //////////////////////////////////////////////////
+// Generate a nonce with time limit using CBC mode.
+//////////////////////////////////////////////////
+func GenNonceCBC(secondLimit int, secretKey string) (string, error) {
+    now := time.Now()
+    limit := now.Add(time.Second * time.Duration(secondLimit))
+    data := strconv.FormatInt(limit.Unix(), 10)
+    return EncryptCBC(data, secretKey)
+}
+
+
+//////////////////////////////////////////////////
+// Verify a nonce with time limit using CBC mode.
+//////////////////////////////////////////////////
+func VerifyNonceCBC(cipherText string, secretKey string) bool {
+    decrypted, err := DecryptCBC(cipherText, secretKey)
+    if err != nil {
+        return false
+    }
+    now := time.Now().Unix()
+    limit, err := strconv.ParseInt(decrypted, 10, 64)
+    if err != nil {
+        return false
+    }
+    return limit > now
+}
+
+
+//////////////////////////////////////////////////
+// Generate a nonce with time limit using CTR mode.
+//////////////////////////////////////////////////
+func GenNonceCTR(secondLimit int, secretKey string) (string, error) {
+    now := time.Now()
+    limit := now.Add(time.Second * time.Duration(secondLimit))
+    data := strconv.FormatInt(limit.Unix(), 10)
+    return EncryptCTR(data, secretKey)
+}
+
+
+//////////////////////////////////////////////////
+// Verify a nonce with time limit using CTR mode.
+//////////////////////////////////////////////////
+func VerifyNonceCTR(cipherText string, secretKey string) bool {
+    decrypted, err := DecryptCTR(cipherText, secretKey)
+    if err != nil {
+        return false
+    }
+    now := time.Now().Unix()
+    limit, err := strconv.ParseInt(decrypted, 10, 64)
+    if err != nil {
+        return false
+    }
+    return limit > now
+}
+
+
+//////////////////////////////////////////////////
 // 0 Padding with 16 times from left side.
-// @param 
+// @param text: [string] The text to pad with 0.
 //////////////////////////////////////////////////
 func padLeft16Times(text string) string {
     padCnt := aes.BlockSize - len(text) % aes.BlockSize

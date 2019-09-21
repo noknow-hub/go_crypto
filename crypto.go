@@ -27,13 +27,13 @@
 package crypto
 
 import (
+    "encoding/json"
     "crypto/aes"
     "crypto/cipher"
     "crypto/rand"
     "encoding/hex"
     "io"
     "runtime"
-    "strconv"
     "strings"
     "time"
 )
@@ -41,6 +41,11 @@ import (
 var (
     version = runtime.Version()
 )
+
+type Token struct {
+    Data string
+    Expires int64
+}
 
 
 //////////////////////////////////////////////////
@@ -185,58 +190,78 @@ func VerifyCTR(plainText string, secretKey string, cipherText string) bool {
 
 
 //////////////////////////////////////////////////
-// Generate a nonce with time limit using CBC mode.
+// Generate a token with time limit using CBC mode.
 //////////////////////////////////////////////////
-func GenNonceCBC(secondLimit int, secretKey string) (string, error) {
+func GenTokenCBC(plainText string, secondLimit int, secretKey string) (string, error) {
     now := time.Now()
     limit := now.Add(time.Second * time.Duration(secondLimit))
-    data := strconv.FormatInt(limit.Unix(), 10)
-    return EncryptCBC(data, secretKey)
+    token := Token{
+        Data: plainText,
+        Expires: limit.Unix(),
+    }
+    b, err := json.Marshal(token)
+    if err != nil {
+        return "", err
+    }
+    return EncryptCBC(string(b), secretKey)
 }
 
 
 //////////////////////////////////////////////////
-// Verify a nonce with time limit using CBC mode.
+// Verify a token with time limit using CBC mode.
 //////////////////////////////////////////////////
-func VerifyNonceCBC(cipherText string, secretKey string) bool {
+func VerifyTokenCBC(plainText string, cipherText string, secretKey string) bool {
     decrypted, err := DecryptCBC(cipherText, secretKey)
     if err != nil {
         return false
     }
-    now := time.Now().Unix()
-    limit, err := strconv.ParseInt(decrypted, 10, 64)
-    if err != nil {
+    var token Token
+    if err = json.Unmarshal([]byte(decrypted), &token); err != nil {
         return false
     }
-    return limit > now
+    if plainText != token.Data {
+        return false
+    }
+    now := time.Now().Unix()
+    return token.Expires > now
 }
 
 
 //////////////////////////////////////////////////
-// Generate a nonce with time limit using CTR mode.
+// Generate a token with time limit using CTR mode.
 //////////////////////////////////////////////////
-func GenNonceCTR(secondLimit int, secretKey string) (string, error) {
+func GenTokenCTR(plainText string, secondLimit int, secretKey string) (string, error) {
     now := time.Now()
     limit := now.Add(time.Second * time.Duration(secondLimit))
-    data := strconv.FormatInt(limit.Unix(), 10)
-    return EncryptCTR(data, secretKey)
+    token := Token{
+        Data: plainText,
+        Expires: limit.Unix(),
+    }
+    b, err := json.Marshal(token)
+    if err != nil {
+        return "", err
+    }
+    return EncryptCTR(string(b), secretKey)
 }
 
 
 //////////////////////////////////////////////////
-// Verify a nonce with time limit using CTR mode.
+// Verify a token with time limit using CTR mode.
 //////////////////////////////////////////////////
-func VerifyNonceCTR(cipherText string, secretKey string) bool {
+func VerifyTokenCTR(plainText string, cipherText string, secretKey string) bool {
     decrypted, err := DecryptCTR(cipherText, secretKey)
     if err != nil {
         return false
     }
-    now := time.Now().Unix()
-    limit, err := strconv.ParseInt(decrypted, 10, 64)
-    if err != nil {
+    var token Token
+    if err = json.Unmarshal([]byte(decrypted), &token); err != nil {
         return false
     }
-    return limit > now
+    if plainText != token.Data {
+        return false
+    }
+    now := time.Now().Unix()
+    return token.Expires > now
 }
 
 
